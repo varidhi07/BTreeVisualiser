@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>B-Tree Visualizer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>B-Tree Visualizer</h1>
+
+  <div class="controls">
+    <label for="degreeInput">Degree (max keys):
+      <input id="degreeInput" type="number" value="3" min="2" max="5" />
+    </label>
+
+    <label for="keyInput">Key:
+      <input id="keyInput" type="number" placeholder="Enter value" />
+    </label>
+
+    <button id="insertBtn">Insert</button>
+    <button id="searchBtn">Search</button>
+    <button id="deleteBtn">Delete</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+  <div id="resultBox">No operations yet.</div>
+
+  <div id="canvasWrap">
+    <svg id="treeCanvas" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMin meet"></svg>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
