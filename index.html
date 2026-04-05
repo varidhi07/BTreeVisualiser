@@ -1,35 +1,850 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>B-Tree Visualizer</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B-Tree Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="number"] {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            width: 120px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+        }
+
+        .btn-insert {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn-delete {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .visualization {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow-x: auto;
+            min-height: 400px;
+        }
+
+        #canvas {
+            display: block;
+            margin: 0 auto;
+        }
+
+        .info {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .error {
+            color: #f5576c;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-  <h1>B-Tree Visualizer</h1>
+    <div class="container">
+        <h1>B-Tree Visualizer</h1>
+        
+        <div class="controls">
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="order">Max Keys:</label>
+                    <input type="number" id="order" value="4" min="2" max="10">
+                </div>
+                <div class="control-group">
+                    <label for="value">Value:</label>
+                    <input type="number" id="value" value="">
+                </div>
+                <button class="btn-insert" onclick="insertValue()">Insert</button>
+                <button class="btn-delete" onclick="deleteValue()">Delete</button>
+                <button class="btn-insert" onclick="searchValue()">Search</button>
+                <button class="btn-clear" onclick="clearTree()">Clear Tree</button>
+            </div>
+            <div class="info">
+                <strong>Instructions:</strong> Enter a value and click Insert to add it to the B-tree. 
+                Max Keys determines the maximum number of keys per node.
+                <div id="error" class="error"></div>
+            </div>
+        </div>
 
-  <div class="controls">
-    <label for="degreeInput">Degree (max keys):
-      <input id="degreeInput" type="number" value="3" min="2" max="5" />
-    </label>
+        <div class="visualization">
+            <canvas id="canvas" width="1100" height="500"></canvas>
+        </div>
+    </div>
 
-    <label for="keyInput">Key:
-      <input id="keyInput" type="number" placeholder="Enter value" />
-    </label>
+    <script>
+        (function() {
+            let NKEYS = 4;
+            let highlightKey = null;
+            let searchPath = [];
+            let currentSearchStep = -1;
+            let isAnimating = false;
 
-    <button id="insertBtn">Insert</button>
-    <button id="searchBtn">Search</button>
-    <button id="deleteBtn">Delete</button>
-    <button id="resetBtn">Reset</button>
-  </div>
+            function arrayOfSize(size) {
+                const a = Array(size);
+                for (let i = 0; i < size; i++) {
+                    a[i] = null;
+                }
+                return a;
+            }
 
-  <div id="resultBox">No operations yet.</div>
+            function BTreeNode() {
+                this._keyCount = 0;
+                this._keys = arrayOfSize(NKEYS);
+                this._childs = arrayOfSize(NKEYS + 1);
+            }
 
-  <div id="canvasWrap">
-    <svg id="treeCanvas" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMin meet"></svg>
-  </div>
+            BTreeNode.prototype.isLeaf = function() {
+                return (this._childs[0] === null);
+            };
 
-  <script src="script.js" defer></script>
+            BTreeNode.prototype.isFull = function() {
+                return (this._keyCount === NKEYS);
+            };
+
+            BTreeNode.prototype.keyCount = function() {
+                return this._keyCount;
+            };
+
+            BTreeNode.prototype.add = function(key) {
+                if (this.isLeaf()) {
+                    if (this.isFull()) {
+                        return this.split(key, null);
+                    } else {
+                        this.insertKey(key);
+                        return null;
+                    }
+                } else {
+                    const child = this.getChildContaining(key);
+                    const split = child.add(key);
+                    if (!split) {
+                        return null;
+                    }
+                    
+                    if (this.isFull()) {
+                        return this.split(split.key, split.right);
+                    } else {
+                        this.insertSplit(split);
+                        return null;
+                    }
+                }
+            };
+
+            BTreeNode.prototype.insertKey = function(key) {
+                let pos = this.keyCount();
+                const keys = this._keys;
+                while (pos > 0 && keys[pos - 1] > key) {
+                    keys[pos] = keys[pos - 1];
+                    pos--;
+                }
+                keys[pos] = key;
+                this._keyCount += 1;
+            };
+
+            BTreeNode.prototype.insertSplit = function(split) {
+                const child = split.left;
+                
+                if (child === this._childs[0]) {
+                    for (let i = this._keyCount; i > 0; i--) {
+                        this._keys[i] = this._keys[i - 1];
+                    }
+                    this._keys[0] = split.key;
+                    for (let i = this._keyCount + 1; i > 1; i--) {
+                        this._childs[i] = this._childs[i - 1];
+                    }
+                    this._childs[0] = child;
+                    this._childs[1] = split.right;
+                } else {
+                    let pos = this._keyCount;
+                    while (pos > 0 && this._childs[pos] !== child) {
+                        this._keys[pos] = this._keys[pos - 1];
+                        this._childs[pos + 1] = this._childs[pos];
+                        pos--;
+                    }
+                    this._keys[pos] = split.key;
+                    this._childs[pos + 1] = split.right;
+                }
+                
+                this._keyCount += 1;
+            };
+
+            BTreeNode.prototype.getChildContaining = function(key) {
+                for (let i = 0; i < this.keyCount(); i++) {
+                    if (key <= this._keys[i]) {
+                        return this._childs[i];
+                    }
+                }
+                return this._childs[this.keyCount()];
+            };
+
+            BTreeNode.prototype.split = function(key, keyRightChild) {
+                const left = this;
+                const right = new BTreeNode();
+                
+                const keys = this._keys.slice(0, NKEYS);
+                keys.push(key);
+                const childs = this._childs.slice(0, NKEYS + 1);
+                childs.push(keyRightChild);
+                
+                let pos = keys.length - 1;
+                while (pos > 0 && keys[pos - 1] > keys[pos]) {
+                    const tempKey = keys[pos];
+                    keys[pos] = keys[pos - 1];
+                    keys[pos - 1] = tempKey;
+                    
+                    const tempChild = childs[pos + 1];
+                    childs[pos + 1] = childs[pos];
+                    childs[pos] = tempChild;
+                    pos--;
+                }
+                
+                const medianIndex = Math.floor(NKEYS / 2);
+                const medianKey = keys[medianIndex];
+                
+                left._keyCount = 0;
+                for (let i = 0; i < NKEYS + 1; i++) {
+                    left._keys[i] = null;
+                    left._childs[i] = null;
+                }
+                
+                for (let i = 0; i < medianIndex; i++) {
+                    left._keys[i] = keys[i];
+                    left._childs[i] = childs[i];
+                    left._keyCount++;
+                }
+                left._childs[medianIndex] = childs[medianIndex];
+                
+                for (let i = medianIndex + 1; i < keys.length; i++) {
+                    right._keys[i - medianIndex - 1] = keys[i];
+                    right._childs[i - medianIndex - 1] = childs[i];
+                    right._keyCount++;
+                }
+                right._childs[keys.length - medianIndex - 1] = childs[keys.length];
+                
+                return { left: left, key: medianKey, right: right };
+            };
+
+            BTreeNode.prototype.remove = function(key) {
+                if (this.isLeaf()) {
+                    return this.removeKey(key);
+                } else {
+                    const keyIndex = this.indexOfKey(key);
+                    let child;
+                    
+                    if (keyIndex === -1) {
+                        child = this.getChildContaining(key);
+                        const result = child.remove(key);
+                        this.rebalance(this._childs.indexOf(child));
+                        return result;
+                    } else {
+                        child = this._childs[keyIndex];
+                        this._keys[keyIndex] = child.extractMax();
+                        this.rebalance(keyIndex);
+                        return true;
+                    }
+                }
+            };
+
+            BTreeNode.prototype.rebalance = function(childIndex) {
+                const MIN_NKEYS = Math.floor(NKEYS / 2);
+                const child = this._childs[childIndex];
+                
+                if (!child || child.keyCount() >= MIN_NKEYS) {
+                    return;
+                }
+
+                if (childIndex > 0 && this._childs[childIndex - 1] && this._childs[childIndex - 1].keyCount() > MIN_NKEYS) {
+                    this.borrowFromPrev(childIndex);
+                    return;
+                }
+
+                if (childIndex < this.keyCount() && this._childs[childIndex + 1] && this._childs[childIndex + 1].keyCount() > MIN_NKEYS) {
+                    this.borrowFromNext(childIndex);
+                    return;
+                }
+
+                if (childIndex > 0) {
+                    childIndex -= 1;
+                }
+
+                const merged = this.mergeChilds(childIndex);
+                for (let i = childIndex; i < this._keyCount - 1; i++) {
+                    this._keys[i] = this._keys[i + 1];
+                }
+                this._keys[this._keyCount - 1] = null;
+                
+                for (let i = childIndex; i < this._keyCount; i++) {
+                    this._childs[i] = this._childs[i + 1];
+                }
+                this._childs[this._keyCount] = null;
+                
+                this._keyCount--;
+                this._childs[childIndex] = merged;
+            };
+
+            BTreeNode.prototype.borrowFromPrev = function(childIndex) {
+                const child = this._childs[childIndex];
+                const sibling = this._childs[childIndex - 1];
+                
+                if (!child || !sibling) {
+                    return;
+                }
+
+                for (let i = child._keyCount - 1; i >= 0; i--) {
+                    child._keys[i + 1] = child._keys[i];
+                }
+                
+                if (!child.isLeaf()) {
+                    for (let i = child._keyCount; i >= 0; i--) {
+                        child._childs[i + 1] = child._childs[i];
+                    }
+                }
+
+                child._keys[0] = this._keys[childIndex - 1];
+                if (!child.isLeaf()) {
+                    child._childs[0] = sibling._childs[sibling._keyCount];
+                }
+
+                this._keys[childIndex - 1] = sibling._keys[sibling._keyCount - 1];
+                sibling._keys[sibling._keyCount - 1] = null;
+                if (!child.isLeaf() && sibling._childs[sibling._keyCount]) {
+                    sibling._childs[sibling._keyCount] = null;
+                }
+                
+                child._keyCount++;
+                sibling._keyCount--;
+            };
+
+            BTreeNode.prototype.borrowFromNext = function(childIndex) {
+                const child = this._childs[childIndex];
+                const sibling = this._childs[childIndex + 1];
+                
+                if (!child || !sibling) {
+                    return;
+                }
+
+                child._keys[child._keyCount] = this._keys[childIndex];
+
+                if (!child.isLeaf()) {
+                    child._childs[child._keyCount + 1] = sibling._childs[0];
+                }
+
+                this._keys[childIndex] = sibling._keys[0];
+
+                for (let i = 1; i < sibling._keyCount; i++) {
+                    sibling._keys[i - 1] = sibling._keys[i];
+                }
+                sibling._keys[sibling._keyCount - 1] = null;
+
+                if (!sibling.isLeaf()) {
+                    for (let i = 1; i <= sibling._keyCount; i++) {
+                        sibling._childs[i - 1] = sibling._childs[i];
+                    }
+                    sibling._childs[sibling._keyCount] = null;
+                }
+
+                child._keyCount++;
+                sibling._keyCount--;
+            };
+
+            BTreeNode.prototype.mergeChilds = function(leftIndex) {
+                const key = this._keys[leftIndex];
+                const left = this._childs[leftIndex];
+                const right = this._childs[leftIndex + 1];
+
+                left._keys[left._keyCount] = key;
+                left._keyCount++;
+
+                for (let i = 0; i < right._keyCount; i++) {
+                    left._childs[left._keyCount] = right._childs[i];
+                    left._keys[left._keyCount] = right._keys[i];
+                    left._keyCount += 1;
+                }
+                left._childs[left._keyCount] = right._childs[right._keyCount];
+
+                return left;
+            };
+
+            BTreeNode.prototype.extractMax = function() {
+                let key;
+                if (this.isLeaf()) {
+                    key = this._keys[this._keyCount - 1];
+                    this._keyCount--;
+                } else {
+                    const child = this._childs[this._keyCount];
+                    key = child.extractMax();
+                    this.rebalance(this._keyCount);
+                }
+                return key;
+            };
+
+            BTreeNode.prototype.indexOfKey = function(key) {
+                for (let i = 0; i < this._keyCount; i++) {
+                    if (this._keys[i] === key) {
+                        return i;
+                    }
+                }
+                return -1;
+            };
+
+            BTreeNode.prototype.removeKey = function(key) {
+                const keyIndex = this.indexOfKey(key);
+                if (keyIndex === -1) {
+                    return false;
+                }
+
+                for (let i = keyIndex + 1; i < this._keyCount; i++) {
+                    this._keys[i - 1] = this._keys[i];
+                }
+                this._keyCount--;
+                return true;
+            };
+
+            BTreeNode.fromSplit = function(split) {
+                const node = new BTreeNode();
+                node._keyCount = 1;
+                node._keys[0] = split.key;
+                node._childs[0] = split.left;
+                node._childs[1] = split.right;
+                return node;
+            };
+
+            function BTree() {
+                this._root = new BTreeNode();
+            }
+
+            BTree.prototype.add = function(key) {
+                const split = this._root.add(key);
+                if (split) {
+                    this._root = BTreeNode.fromSplit(split);
+                }
+            };
+
+            BTree.prototype.search = function(key, node) {
+                node = node || this._root;
+                
+                for (let i = 0; i < node._keyCount; i++) {
+                    if (node._keys[i] === key) {
+                        return true;
+                    }
+                }
+                
+                if (node.isLeaf()) {
+                    return false;
+                }
+                
+                const child = node.getChildContaining(key);
+                return this.search(key, child);
+            };
+
+            BTree.prototype.searchWithPath = function(key, node, path) {
+                node = node || this._root;
+                path = path || [];
+                
+                path.push(node);
+                
+                for (let i = 0; i < node._keyCount; i++) {
+                    if (node._keys[i] === key) {
+                        return { found: true, path: path };
+                    }
+                }
+                
+                if (node.isLeaf()) {
+                    return { found: false, path: path };
+                }
+                
+                const child = node.getChildContaining(key);
+                return this.searchWithPath(key, child, path);
+            };
+
+            BTree.prototype.remove = function(key) {
+                if (!this._root || this._root._keyCount === 0) {
+                    return false;
+                }
+                
+                const removed = this._root.remove(key);
+                if (this._root.keyCount() === 0 && !this._root.isLeaf() && this._root._childs[0]) {
+                    this._root = this._root._childs[0];
+                }
+                return removed;
+            };
+
+            let btree = new BTree();
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            function calculateTreeWidth(node) {
+                if (!node || node._keyCount === 0) {
+                    return 0;
+                }
+                
+                if (node.isLeaf()) {
+                    return node._keyCount * 40 + 40;
+                }
+                
+                let totalWidth = 0;
+                for (let i = 0; i <= node._keyCount; i++) {
+                    if (node._childs[i]) {
+                        totalWidth += calculateTreeWidth(node._childs[i]);
+                    }
+                }
+                return Math.max(totalWidth, node._keyCount * 40 + 40);
+            }
+
+            function drawTree() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (btree._root && btree._root._keyCount > 0) {
+                    const treeWidth = calculateTreeWidth(btree._root);
+                    const startX = Math.max(canvas.width / 2, treeWidth / 2 + 50);
+                    drawNode(btree._root, startX, 50, null);
+                }
+            }
+
+            function drawNode(node, x, y, siblingPositions) {
+                const keyCount = node._keyCount;
+                const nodeWidth = keyCount * 40 + 20;
+                const nodeHeight = 40;
+                const keyWidth = 40;
+
+                // Check if this node is in the current search path
+                let isInPath = false;
+                let isCurrentNode = false;
+                if (isAnimating && searchPath.length > 0) {
+                    for (let s = 0; s <= currentSearchStep && s < searchPath.length; s++) {
+                        if (searchPath[s] === node) {
+                            isInPath = true;
+                            if (s === currentSearchStep) {
+                                isCurrentNode = true;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // Draw node with animation effects
+                if (isCurrentNode) {
+                    ctx.strokeStyle = '#f093fb';
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = '#f093fb';
+                    ctx.shadowBlur = 20;
+                } else if (isInPath) {
+                    ctx.strokeStyle = '#4facfe';
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = '#4facfe';
+                    ctx.shadowBlur = 10;
+                } else {
+                    ctx.strokeStyle = '#667eea';
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 0;
+                }
+                
+                ctx.strokeRect(x - nodeWidth / 2, y, nodeWidth, nodeHeight);
+                ctx.shadowBlur = 0;
+
+                ctx.fillStyle = '#333';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                for (let i = 0; i < keyCount; i++) {
+                    const keyX = x - nodeWidth / 2 + (i + 0.5) * keyWidth + 10;
+                    
+                    if (highlightKey !== null && node._keys[i] === highlightKey && isCurrentNode) {
+                        ctx.fillStyle = '#f093fb';
+                        ctx.fillRect(x - nodeWidth / 2 + i * keyWidth + 10, y, keyWidth, nodeHeight);
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 16px Arial';
+                    } else if (isCurrentNode) {
+                        ctx.fillStyle = '#ffe6f0';
+                        ctx.fillRect(x - nodeWidth / 2 + i * keyWidth + 10, y, keyWidth, nodeHeight);
+                        ctx.fillStyle = '#333';
+                    } else if (highlightKey !== null && node._keys[i] === highlightKey) {
+                        ctx.fillStyle = '#4facfe';
+                        ctx.fillRect(x - nodeWidth / 2 + i * keyWidth + 10, y, keyWidth, nodeHeight);
+                        ctx.fillStyle = 'white';
+                    } else {
+                        ctx.fillStyle = '#333';
+                    }
+                    
+                    ctx.fillText(node._keys[i], keyX, y + nodeHeight / 2);
+                    ctx.font = '16px Arial';
+                    
+                    if (i < keyCount - 1) {
+                        ctx.strokeStyle = isCurrentNode ? '#f093fb' : (isInPath ? '#4facfe' : '#667eea');
+                        ctx.lineWidth = isCurrentNode ? 3 : (isInPath ? 2 : 2);
+                        ctx.beginPath();
+                        ctx.moveTo(x - nodeWidth / 2 + (i + 1) * keyWidth + 10, y);
+                        ctx.lineTo(x - nodeWidth / 2 + (i + 1) * keyWidth + 10, y + nodeHeight);
+                        ctx.stroke();
+                    }
+                }
+
+                if (!node.isLeaf()) {
+                    const childY = y + 100;
+                    
+                    const childWidths = [];
+                    for (let i = 0; i <= keyCount; i++) {
+                        if (node._childs[i]) {
+                            childWidths.push(calculateTreeWidth(node._childs[i]));
+                        }
+                    }
+                    
+                    const totalChildWidth = childWidths.reduce((a, b) => a + b, 0);
+                    let currentX = x - totalChildWidth / 2;
+                    
+                    for (let i = 0; i <= keyCount; i++) {
+                        if (node._childs[i]) {
+                            const childWidth = childWidths[i];
+                            const childX = currentX + childWidth / 2;
+                            
+                            // Highlight edge if this is the path being traversed
+                            let isEdgeInPath = false;
+                            if (isAnimating && currentSearchStep < searchPath.length - 1) {
+                                if (searchPath[currentSearchStep] === node && searchPath[currentSearchStep + 1] === node._childs[i]) {
+                                    isEdgeInPath = true;
+                                }
+                            }
+                            
+                            if (isEdgeInPath) {
+                                ctx.strokeStyle = '#f093fb';
+                                ctx.lineWidth = 4;
+                                ctx.shadowColor = '#f093fb';
+                                ctx.shadowBlur = 15;
+                            } else {
+                                ctx.strokeStyle = '#999';
+                                ctx.lineWidth = 1.5;
+                                ctx.shadowBlur = 0;
+                            }
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(x - nodeWidth / 2 + (i * keyWidth) + 10, y + nodeHeight);
+                            ctx.lineTo(childX, childY);
+                            ctx.stroke();
+                            ctx.shadowBlur = 0;
+
+                            drawNode(node._childs[i], childX, childY, null);
+                            currentX += childWidth;
+                        }
+                    }
+                }
+            }
+
+            window.insertValue = function() {
+                const value = parseInt(document.getElementById('value').value);
+                const errorDiv = document.getElementById('error');
+                
+                if (isNaN(value)) {
+                    errorDiv.textContent = 'Please enter a valid number';
+                    return;
+                }
+
+                if (btree.search(value)) {
+                    errorDiv.textContent = 'Value already exists in the tree';
+                    return;
+                }
+
+                errorDiv.textContent = '';
+                highlightKey = null;
+                btree.add(value);
+                document.getElementById('value').value = '';
+                drawTree();
+            };
+
+            window.deleteValue = function() {
+                const value = parseInt(document.getElementById('value').value);
+                const errorDiv = document.getElementById('error');
+                
+                if (isNaN(value)) {
+                    errorDiv.textContent = 'Please enter a valid number';
+                    return;
+                }
+
+                if (!btree.search(value)) {
+                    errorDiv.textContent = 'Value not found in the tree';
+                    return;
+                }
+
+                errorDiv.textContent = '';
+                highlightKey = null;
+                btree.remove(value);
+                document.getElementById('value').value = '';
+                drawTree();
+            };
+
+            window.searchValue = function() {
+                const value = parseInt(document.getElementById('value').value);
+                const errorDiv = document.getElementById('error');
+                
+                if (isNaN(value)) {
+                    errorDiv.textContent = 'Please enter a valid number';
+                    return;
+                }
+
+                // Reset animation state
+                searchPath = [];
+                currentSearchStep = -1;
+                isAnimating = true;
+                highlightKey = null;
+
+                const result = btree.searchWithPath(value);
+                searchPath = result.path;
+
+                if (result.found) {
+                    errorDiv.textContent = 'Searching for ' + value + '...';
+                    errorDiv.style.color = '#4facfe';
+                } else {
+                    errorDiv.textContent = 'Searching for ' + value + '...';
+                    errorDiv.style.color = '#f5576c';
+                }
+
+                // Animate the search
+                let step = 0;
+                const animate = function() {
+                    currentSearchStep = step;
+                    drawTree();
+                    
+                    step++;
+                    if (step <= searchPath.length) {
+                        setTimeout(animate, 500);
+                    } else {
+                        isAnimating = false;
+                        if (result.found) {
+                            highlightKey = value;
+                            errorDiv.textContent = 'Value found in the tree! (highlighted in pink)';
+                            errorDiv.style.color = '#f093fb';
+                        } else {
+                            errorDiv.textContent = 'Value not found in the tree';
+                            errorDiv.style.color = '#f5576c';
+                        }
+                        drawTree();
+                    }
+                };
+                
+                animate();
+            };
+
+            window.clearTree = function() {
+                NKEYS = parseInt(document.getElementById('order').value);
+                btree = new BTree();
+                highlightKey = null;
+                document.getElementById('error').textContent = '';
+                document.getElementById('error').style.color = '#f5576c';
+                drawTree();
+            };
+
+            document.getElementById('value').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    insertValue();
+                }
+            });
+
+            document.getElementById('order').addEventListener('change', function() {
+                const order = parseInt(this.value);
+                if (order >= 2 && order <= 10) {
+                    NKEYS = order;
+                    btree = new BTree();
+                    drawTree();
+                    document.getElementById('error').textContent = '';
+                } else {
+                    document.getElementById('error').textContent = 'Max keys must be between 2 and 10';
+                }
+            });
+
+            drawTree();
+        })();
+    </script>
 </body>
 </html>
